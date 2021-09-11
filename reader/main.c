@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #include "../shm_protocol.h"
 
@@ -24,9 +25,13 @@ int shm_init() {
 
 
 void cleanup() {
-    munmap((void*)src, sizeof(struct shm_data));
-    close(sh_fd);
-    //shm_unlink(SHMEM_NAME);
+    if (src != NULL) {
+        munmap((void *) src, sizeof(struct shm_data));
+        close(sh_fd);
+        sh_fd = 0;
+        src = NULL;
+        shm_unlink(SHMEM_NAME);
+    }
 }
 void* read_loop(void* p) {
     (void)p;
@@ -48,9 +53,18 @@ void* read_loop(void* p) {
     return NULL;
 }
 
+void sig_handler(int signum) {
+    cleanup();
+    exit(0);
+}
+
 int main() {
 
     shm_init();
+
+    signal(SIGINT, sig_handler);
+    signal(SIGHUP, sig_handler);
+    signal(SIGTERM, sig_handler);
 
     pthread_t tid;
     pthread_attr_t tatt;
@@ -60,6 +74,7 @@ int main() {
     getchar();
     quit = true;
 
+    pthread_join(tid, NULL);
     cleanup();
     return 0;
 }

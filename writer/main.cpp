@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <csignal>
 
 #include "../shm_protocol.h"
 
@@ -23,9 +24,13 @@ bool shm_init() {
 }
 
 void cleanup() {
-    munmap(dst, sizeof(struct shm_data));
-    close(sh_fd);
-    shm_unlink(SHMEM_NAME);
+    if (dst != nullptr) {
+        munmap(dst, sizeof(struct shm_data));
+        close(sh_fd);
+        shm_unlink(SHMEM_NAME);
+        dst = nullptr;
+        sh_fd = 0;
+    }
 }
 
 void write_loop() {
@@ -39,7 +44,7 @@ void write_loop() {
         a += 1;
         b += 2;
         std::cout << (int)a << ", \t" << (int)b << ", \t" << x << ", \t" << y << std::endl;
-	dst->a = a;z
+	dst->a = a;
 	dst->b = b;
 	dst->x = x;
 	dst->y = y;
@@ -47,15 +52,31 @@ void write_loop() {
     }
 }
 
+void sig_handler(int signum) {
+    std::cerr << "cleanup from signal: " << signum << std::endl;
+    cleanup();
+    exit(signum);
+}
+
 int main() {
     shm_init();
 
+    signal(SIGINT, sig_handler);
+    signal(SIGHUP, sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGKILL, sig_handler);
+    signal(SIGQUIT, sig_handler);
+
     auto t = std::thread(write_loop);
-    t.detach();
+     //t.detach();
 
     std::cin.get();
     quit = true;
+    t.join();
 
+    std::cerr << "cleanup from main" << std::endl;
     cleanup();
+
     return 0;
+
 }
